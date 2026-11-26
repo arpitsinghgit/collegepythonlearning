@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syntax Error Detective</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F7FA; --ink:#0B1F33; --mute:#5A6B7C; --card:#fff;
+  --yel:#FFD23F; --cor:#FF8A7A; --mint:#5EE0B5; --sky:#6CB6FF; --lil:#C9B6FF;
+  --red:#E5484D; --redbg:#FFE1DD; --grn:#12805C; --grnbg:#D3F6E6;
+  --ui:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Fira Code",Consolas,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;color:var(--ink);font:16px/1.5 var(--ui);background-color:var(--bg);
+  background-image:linear-gradient(#DCE6EE 1px,transparent 1px),linear-gradient(90deg,#DCE6EE 1px,transparent 1px);background-size:30px 30px}
+.page{max-width:1180px;margin:0 auto;padding:34px 18px 70px}
+h1{margin:0;font-size:clamp(34px,6vw,62px);font-weight:800;letter-spacing:-.04em;line-height:1}
+.sub{margin:8px 0 22px;font-size:18px;color:var(--mute)}
+:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+button{font-family:inherit}
+/* level stepper */
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.lv{font:700 14px var(--ui);color:var(--ink);background:#fff;border:2.5px solid var(--ink);border-radius:99px;padding:6px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;transition:.15s}
+.lv:hover{transform:translateY(-2px);box-shadow:0 3px 0 var(--ink)}
+.lv[aria-current=true]{background:var(--ink);color:#fff}
+.lv i{width:16px;height:16px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font-style:normal;font-size:10px;line-height:1}
+.lv.done i{background:var(--mint);border-color:var(--ink);color:var(--ink)}
+.cnt{margin-left:auto;font:700 14px var(--mono);background:var(--yel);border:2.5px solid var(--ink);border-radius:99px;padding:5px 14px}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px;align-items:start}
+.card{background:var(--card);border:3px solid var(--ink);border-radius:16px;box-shadow:8px 8px 0 var(--ink);padding:20px;position:relative}
+.card.win{animation:win .8s}
+@keyframes win{0%{box-shadow:8px 8px 0 var(--ink)}30%{box-shadow:8px 8px 0 var(--grn),0 0 0 6px var(--mint)}100%{box-shadow:8px 8px 0 var(--ink)}}
+.goal{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.goal h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.goal span{font:500 14px var(--mono);background:var(--yel);border:2px solid var(--ink);border-radius:8px;padding:3px 10px}
+.clue{display:flex;gap:10px;align-items:center;border:2.5px solid var(--ink);border-radius:10px;padding:8px 12px;font:500 14px var(--mono);margin-bottom:12px;transition:background .3s}
+.clue::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--red);flex:none}
+.clue.err{background:var(--redbg)}
+.clue.ok{background:var(--grnbg)}.clue.ok::before{background:var(--grn)}
+.clue.flip{animation:flip .4s}
+@keyframes flip{from{transform:translateY(-6px);opacity:.3}}
+/* code editor */
+.code{background:#FBFDFF;border:2.5px solid var(--ink);border-radius:10px;padding:8px 0;font:500 17px var(--mono);overflow-x:auto}
+.cl{display:flex;align-items:center;min-height:50px;white-space:pre;border-left:4px solid transparent;padding-right:14px;transition:background .2s}
+.cl em{font-style:normal;width:36px;text-align:right;padding-right:12px;color:#9AA9B8;flex:none;user-select:none;font-size:14px}
+.cl .mk{width:22px;flex:none;font:800 14px var(--ui);text-align:center}
+.cl .tx{flex:1}
+.cm{color:#7A8B9B;font-style:italic}.st{color:#0A7A55}.kw{color:#1B5FD1;font-weight:600}.bi{color:#0E7090}.nm{color:#B54708}
+.cl.on{background:#DCEBFF;border-left-color:var(--sky)}
+.cl.ok .mk{color:var(--grn)}
+.cl.bad{background:var(--redbg);border-left-color:var(--red);animation:shake .45s}
+.cl.bad .mk{color:var(--red)}
+.cl.lint .tx{text-decoration:underline wavy var(--red);text-decoration-thickness:1.5px;text-underline-offset:6px}
+@keyframes shake{20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+/* gaps and tiles */
+.gap{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:36px;margin:0 3px;padding:0;background:transparent;border:2.5px dashed var(--ink);border-radius:9px;cursor:pointer;vertical-align:middle;transition:transform .15s,background .15s}
+.gap:empty{animation:march 1.4s linear infinite;background-image:linear-gradient(90deg,transparent 50%,rgba(255,210,63,.35) 50%);background-size:12px 100%}
+@keyframes march{to{background-position:12px 0}}
+.gap.fill{border:0;min-width:0;height:auto;margin:0 2px;animation:none;background:none}
+body.dragging .gap:not(.fill),body.sel .gap:not(.fill){background:#FFF3B8;animation:throb .7s ease-in-out infinite}
+@keyframes throb{50%{transform:scale(1.1)}}
+.gap.over{background:var(--yel)!important;transform:scale(1.2)!important;animation:none!important}
+.gap.bad{animation:shake .4s!important;border-color:var(--red)}
+.gap.hint::after{content:"\25BC";position:absolute;margin-top:-52px;font-size:20px;color:var(--red);animation:bob .7s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(8px)}}
+.tile{display:inline-flex;align-items:center;gap:6px;font:600 17px var(--mono);padding:6px 13px;border:2.5px solid var(--ink);border-radius:9px;box-shadow:3px 3px 0 var(--ink);cursor:grab;user-select:none;touch-action:none;color:var(--ink);transition:transform .15s,box-shadow .15s;position:relative}
+.tile:hover{transform:translate(-1px,-2px);box-shadow:4px 5px 0 var(--ink)}
+.tile.p{background:var(--yel)}.tile.b{background:var(--cor)}.tile.q{background:var(--mint)}.tile.i{background:var(--sky)}.tile.n{background:var(--lil)}
+.tile.sel{outline:3px solid var(--ink);outline-offset:3px}
+.tile.ghost{opacity:.25}
+.tile.drag{position:fixed;z-index:99;pointer-events:none;box-shadow:8px 10px 0 rgba(11,31,51,.9);cursor:grabbing;transition:none}
+.tile.in{box-shadow:none;padding:3px 10px;cursor:default}
+.tile.in:hover{transform:none;box-shadow:none}
+.tile.wrong{background:var(--redbg);animation:shake .5s}
+.pop .tile{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+.tile.hint{animation:wob .5s ease-in-out infinite}
+@keyframes wob{50%{transform:rotate(-5deg) scale(1.08)}}
+.coach{margin:12px 0 0;min-height:27px;font-weight:700}
+.coach.bad{color:var(--red)}.coach.good{color:var(--grn)}
+.trayw{margin-top:12px;padding:14px;border:2.5px dashed var(--ink);border-radius:12px;background:#fff}
+.trayw small{display:block;color:var(--mute);margin-bottom:10px;font-weight:600}
+.tray{display:flex;gap:12px;flex-wrap:wrap;min-height:46px}
+.empty{color:var(--mute)}
+/* controls */
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+.btn{font:700 15px var(--ui);color:var(--ink);background:#fff;border:2.5px solid var(--ink);border-radius:10px;padding:9px 18px;box-shadow:3px 3px 0 var(--ink);cursor:pointer;transition:.12s}
+.btn:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+.btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.pri{background:var(--yel)}
+.btn.go{background:var(--mint);animation:nudge 1s ease-in-out infinite}
+@keyframes nudge{50%{transform:translateY(-3px)}}
+.sl{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mute);margin-left:auto}
+.sl input{accent-color:var(--ink);width:100px}
+/* console */
+.con{background:var(--ink);color:#D5E1EE;border-radius:10px;padding:14px 16px;font:500 14px/1.7 var(--mono);min-height:250px;white-space:pre-wrap;overflow-x:auto;border:2.5px solid var(--ink)}
+.con .p{color:#5EE0B5}.con .e{color:#FF9B91}.con .d{color:#8FA3B8}.con .o{color:#fff;animation:slide .3s}
+@keyframes slide{from{opacity:0;transform:translateX(-8px)}}
+.cur{display:inline-block;width:8px;height:15px;background:#D5E1EE;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.stage{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mute);margin:0 0 10px;font-weight:600}
+.stage::before{content:"";width:10px;height:10px;border-radius:50%;background:#B7C3CF}
+.stage.run::before{background:var(--sky);animation:blink 1s infinite}.stage.err::before{background:var(--red)}.stage.fin::before{background:var(--grn)}
+.want{margin-top:14px;font:500 14px var(--mono)}
+.want b{display:block;font:700 14px var(--ui);margin-bottom:6px}
+.want div{background:var(--yel);border:2px solid var(--ink);border-radius:8px;padding:4px 12px;display:inline-block;margin:0 6px 6px 0}
+.done{margin-top:22px;display:none}
+.done.show{display:block;animation:pop .5s}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.rules div{border:2.5px solid var(--ink);border-radius:10px;padding:10px 12px;font-weight:600}
+.rules .tile{margin-bottom:8px;cursor:default}
+.conf{position:fixed;width:10px;height:14px;z-index:200;pointer-events:none;border:1.5px solid var(--ink)}
+@media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}.sl{margin-left:0}.cnt{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01s!important}}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Syntax Error Detective</h1>
+  <p class="sub">Drag the missing piece into the gap. Python tells you when it fits.</p>
+  <div class="steps" id="steps"></div>
+  <div class="layout">
+    <section class="card" id="board">
+      <div class="goal"><h2 id="pname"></h2><span id="pgoal"></span></div>
+      <div class="clue err" id="clue"></div>
+      <div class="code" id="code"></div>
+      <p class="coach" id="coach"></p>
+      <div class="trayw"><small>Pieces. Drag one, or tap it and then tap a gap.</small><div class="tray" id="tray"></div></div>
+      <div class="ctl">
+        <button class="btn pri" id="run">Run</button>
+        <button class="btn" id="step">Step</button>
+        <button class="btn" id="reset">Reset</button>
+        <button class="btn" id="hint">Hint</button>
+        <button class="btn go" id="nextp" style="display:none">Next puzzle</button>
+        <label class="sl">Speed <input type="range" id="speed" min="1" max="10" value="5"></label>
+      </div>
+    </section>
+    <section class="card">
+      <div class="stage" id="stage"></div>
+      <div class="con" id="con"></div>
+      <div class="want"><b>It should print</b><span id="want"></span></div>
+    </section>
+  </div>
+  <section class="card done" id="done">
+    <h2 style="margin:0 0 14px;font-size:22px">Every puzzle fixed. Your rules:</h2>
+    <div class="rules">
+      <div><span class="tile p">:</span>
+A colon opens a block. That includes def, if and for.</div>
+      <div><span class="tile b">( ) [ ] { }</span>
+Brackets come in pairs.</div>
+      <div><span class="tile q">" "</span>
+Quotes come in pairs.</div>
+      <div><span class="tile p">,</span>
+Commas separate items in a list.</div>
+      <div><span class="tile p">==</span>
+== asks a question. = stores a value.</div>
+      <div><span class="tile i">→ 4</span>
+A block is indented.</div>
+      <div><span class="tile n">print</span>
+Names are case-sensitive and must match exactly.</div>
+      <div><span class="tile n">str()</span>
+Turn a number into text before joining it to a string.</div>
+    </div>
+  </section>
+</div>
+<script>
+(()=>{
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* Every message below comes from real Python runs of every gap combination. */
+const ERR={"colon":{"":{"ok":true,"out":["Adult"]},"a":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    if age >= 18","                ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"}},"bracket":{"":{"ok":true,"out":["[90, 85, 70]"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    scores = [90, 85, 70","             ^","SyntaxError: '[' was never closed"],"msg":"SyntaxError: '[' was never closed"}},"quote":{"":{"ok":true,"out":["Asha"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    name = \"Asha","           ^","SyntaxError: unterminated string literal (detected at line 1)"],"msg":"SyntaxError: unterminated string literal (detected at line 1)"}},"indent":{"":{"ok":true,"out":["0","next","1","next","2","next"]},"a":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(i)","    ^","IndentationError: expected an indented block after 'for' statement on line 1"],"msg":"IndentationError: expected an indented block after 'for' statement on line 1"}},"spell":{"":{"ok":true,"out":["Hello"]},"a":{"line":2,"con":["Traceback (most recent call last):","  File \"/tmp/gen/main.py\", line 2, in <module>","    Print(greeting)","    ^^^^^","NameError: name 'Print' is not defined. Did you mean: 'print'?"],"msg":"NameError: name 'Print' is not defined. Did you mean: 'print'?"}},"boss":{"":{"ok":true,"out":["Pass"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    scores = [90, 85, 70","             ^","SyntaxError: '[' was never closed"],"msg":"SyntaxError: '[' was never closed"},"b":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    if scores[0] >= 50","                      ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"c":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass\")","    ^","IndentationError: expected an indented block after 'if' statement on line 2"],"msg":"IndentationError: expected an indented block after 'if' statement on line 2"},"d":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"ab":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    scores = [90, 85, 70","             ^","SyntaxError: '[' was never closed"],"msg":"SyntaxError: '[' was never closed"},"ac":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    scores = [90, 85, 70","             ^","SyntaxError: '[' was never closed"],"msg":"SyntaxError: '[' was never closed"},"ad":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"bc":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    if scores[0] >= 50","                      ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"bd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"cd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"abc":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    scores = [90, 85, 70","             ^","SyntaxError: '[' was never closed"],"msg":"SyntaxError: '[' was never closed"},"abd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"acd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"bcd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"},"abcd":{"line":3,"con":["File \"/tmp/gen/main.py\", line 3","    print(\"Pass)","          ^","SyntaxError: unterminated string literal (detected at line 3)"],"msg":"SyntaxError: unterminated string literal (detected at line 3)"}}};
+Object.assign(ERR,{"paren":{"":{"ok":true,"out":["Hello Asha"]},"a":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Hello\", name","         ^","SyntaxError: '(' was never closed"],"msg":"SyntaxError: '(' was never closed"}},"comma":{"":{"ok":true,"out":["[1, 2, 3]"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    nums = [1, 2 3]","               ^^^","SyntaxError: invalid syntax. Perhaps you forgot a comma?"],"msg":"SyntaxError: invalid syntax. Perhaps you forgot a comma?"}},"dict":{"":{"ok":true,"out":["{'Asha': 12, 'Ben': 14}"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    ages = {\"Asha\": 12, \"Ben\": 14","           ^","SyntaxError: '{' was never closed"],"msg":"SyntaxError: '{' was never closed"}},"equals":{"":{"ok":true,"out":["Adult"]},"a":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    if age = 18:","       ^^^^^^^^","SyntaxError: invalid syntax. Maybe you meant '==' or ':=' instead of '='?"],"msg":"SyntaxError: invalid syntax. Maybe you meant '==' or ':=' instead of '='?"}},"loopin":{"":{"ok":true,"out":["0","1","2"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    for i  range(3):","           ^^^^^","SyntaxError: invalid syntax"],"msg":"SyntaxError: invalid syntax"}},"name":{"":{"ok":true,"out":["Asha"]},"a":{"line":2,"con":["Traceback (most recent call last):","  File \"/tmp/gen/main.py\", line 2, in <module>","    print(nam)","          ^^^","NameError: name 'nam' is not defined. Did you mean: 'name'?"],"msg":"NameError: name 'nam' is not defined. Did you mean: 'name'?","tb":[2]}},"defcolon":{"":{"ok":true,"out":["Hi Asha"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(name)","                   ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"}},"typeerror":{"":{"ok":true,"out":["Age: 18"]},"a":{"line":2,"con":["Traceback (most recent call last):","  File \"/tmp/gen/main.py\", line 2, in <module>","    print(\"Age: \" + (age))","          ~~~~~~~~^~~~~~~","TypeError: can only concatenate str (not \"int\") to str"],"msg":"TypeError: can only concatenate str (not \"int\") to str","tb":[2]}},"boss2":{"":{"ok":true,"out":["Age: 18"]},"a":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"b":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + str(age))","    ^","IndentationError: expected an indented block after function definition on line 1"],"msg":"IndentationError: expected an indented block after function definition on line 1"},"ab":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"c":{"line":2,"con":["Traceback (most recent call last):","  File \"/tmp/gen/main.py\", line 3, in <module>","    greet(18)","  File \"/tmp/gen/main.py\", line 2, in greet","    print(\"Age: \" + (age))","          ~~~~~~~~^~~~~~~","TypeError: can only concatenate str (not \"int\") to str"],"msg":"TypeError: can only concatenate str (not \"int\") to str","tb":[3,2]},"ac":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"bc":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + (age))","    ^","IndentationError: expected an indented block after function definition on line 1"],"msg":"IndentationError: expected an indented block after function definition on line 1"},"abc":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"d":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + str(age)","         ^","SyntaxError: '(' was never closed"],"msg":"SyntaxError: '(' was never closed"},"ad":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"bd":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + str(age)","    ^","IndentationError: expected an indented block after function definition on line 1"],"msg":"IndentationError: expected an indented block after function definition on line 1"},"abd":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"cd":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + (age)","         ^","SyntaxError: '(' was never closed"],"msg":"SyntaxError: '(' was never closed"},"acd":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"},"bcd":{"line":2,"con":["File \"/tmp/gen/main.py\", line 2","    print(\"Age: \" + (age)","    ^","IndentationError: expected an indented block after function definition on line 1"],"msg":"IndentationError: expected an indented block after function definition on line 1"},"abcd":{"line":1,"con":["File \"/tmp/gen/main.py\", line 1","    def greet(age)","                  ^","SyntaxError: expected ':'"],"msg":"SyntaxError: expected ':'"}}});
+const TOK={
+ colon:{t:":",k:"p"},semi:{t:";",k:"p"},comma:{t:",",k:"p"},
+ eq:{t:"=",k:"p"},eqeq:{t:"==",k:"p"},ne:{t:"!=",k:"p"},arrow:{t:"=>",k:"p"},
+ rbr:{t:"]",k:"b"},rpar:{t:")",k:"b"},rcur:{t:"}",k:"b"},
+ dq:{t:'"',k:"q"},sq:{t:"'",k:"q"},
+ i4:{t:"→ 4 spaces",k:"i"},i2:{t:"→ 2 spaces",k:"i"},i0:{t:"no indent",k:"i"},
+ print:{t:"print",k:"n"},prnt:{t:"prnt",k:"n"},echo:{t:"echo",k:"n"},Print:{t:"Print",k:"n"},
+ in:{t:"in",k:"n"},on:{t:"on",k:"n"},of:{t:"of",k:"n"},
+ name:{t:"name",k:"n"},nam:{t:"nam",k:"n"},Name:{t:"Name",k:"n"},naem:{t:"naem",k:"n"},
+ str:{t:"str",k:"n"},int:{t:"int",k:"n"},len:{t:"len",k:"n"}
+};
+const PZ=[
+ {id:"colon",name:"The missing colon",
+  lines:[["age = 18"],["if age >= 18",{g:"a"}],['    print("Adult")']],
+  gaps:{a:{ans:"colon",ok:"A colon opens the block.",why:{semi:"A semicolon ends a statement. A block opens with a colon.",comma:"A comma separates values. A block opens with a colon."}}},
+  tray:["semi","colon","comma"],run:[[1],[2],[3,"Adult"]]},
+ {id:"bracket",name:"The open bracket",
+  lines:[["scores = [90, 85, 70",{g:"a"}],["print(scores)"]],
+  gaps:{a:{ans:"rbr",ok:"Every [ needs its ].",why:{rpar:"A [ closes with ], not ).",rcur:"Curly braces are for dictionaries. A [ closes with ]."}}},
+  tray:["rcur","rbr","rpar"],run:[[1],[2,"[90, 85, 70]"]]},
+ {id:"quote",name:"The open quote",
+  lines:[['name = "Asha',{g:"a"}],["print(name)"]],
+  gaps:{a:{ans:"dq",ok:"A string ends with the quote it started with.",why:{sq:"It started with a double quote, so it must end with one.",rpar:"A bracket does not end a string. A quote does."}}},
+  tray:["sq","rpar","dq"],run:[[1],[2,"Asha"]]},
+ {id:"paren",name:"The open parenthesis",
+  lines:[['name = "Asha"'],['print("Hello", name',{g:"a"}]],
+  gaps:{a:{ans:"rpar",ok:"Every ( needs its ).",why:{rbr:"A ( closes with ), not ].",rcur:"A ( closes with ), not }."}}},
+  tray:["rbr","rpar","rcur"],run:[[1],[2,"Hello Asha"]]},
+ {id:"comma",name:"The missing comma",
+  lines:[["nums = [1, 2",{g:"a"}," 3]"],["print(nums)"]],
+  gaps:{a:{ans:"comma",ok:"List items are separated by commas.",why:{colon:"A colon opens a block. List items need a comma between them.",semi:"A semicolon ends a statement. List items are separated by commas."}}},
+  tray:["semi","comma","colon"],run:[[1],[2,"[1, 2, 3]"]]},
+ {id:"dict",name:"The open brace",
+  lines:[['ages = {"Asha": 12, "Ben": 14',{g:"a"}],["print(ages)"]],
+  gaps:{a:{ans:"rcur",ok:"Every { needs its }.",why:{rbr:"A { closes with }, not ].",rpar:"A { closes with }, not )."}}},
+  tray:["rpar","rcur","rbr"],run:[[1],[2,"{'Asha': 12, 'Ben': 14}"]]},
+ {id:"equals",name:"The single equals",
+  lines:[["age = 18"],["if age ",{g:"a"}," 18:"],['    print("Adult")']],
+  gaps:{a:{ans:"eqeq",pre:"eq",ok:"== asks a question. = stores a value.",why:{ne:"!= means not equal. We want to test if age is equal to 18.",arrow:"=> is not Python. Equal-to is written =="}}},
+  tray:["ne","eqeq","arrow"],run:[[1],[2],[3,"Adult"]]},
+ {id:"loopin",name:"The lost word",
+  lines:[["for i ",{g:"a"}," range(3):"],["    print(i)"]],
+  gaps:{a:{ans:"in",ok:"A for loop reads: for item in collection.",why:{on:"on is not a Python keyword. Loops use in.",of:"of is JavaScript. Python loops use in."}}},
+  tray:["on","in","of"],run:[[1],[2,"0"],[1],[2,"1"],[1],[2,"2"]]},
+ {id:"indent",name:"The flat line",
+  lines:[["for i in range(3):"],[{g:"a"},"print(i)"],['    print("next")']],
+  gaps:{a:{ans:"i4",ok:"Four spaces put the line inside the loop.",why:{i0:"No indent puts the line outside the loop. Python expects a block.",i2:"Lines in one block share the same indent. Line 3 has 4."}}},
+  tray:["i2","i4","i0"],run:[[1],[2,"0"],[3,"next"],[2,"1"],[3,"next"],[2,"2"],[3,"next"]]},
+ {id:"spell",name:"The wrong name",
+  lines:[['greeting = "Hello"'],[{g:"a"},"(greeting)"]],
+  gaps:{a:{ans:"print",pre:"Print",ok:"Python is case-sensitive. The real name is print.",why:{prnt:"Close, but the name has an i: print.",echo:"echo is a shell command. Python uses print."}}},
+  tray:["prnt","print","echo"],run:[[1],[2,"Hello"]]},
+ {id:"name",name:"The misspelled variable",
+  lines:[['name = "Asha"'],["print(",{g:"a"},")"]],
+  gaps:{a:{ans:"name",pre:"nam",ok:"A variable must be spelled exactly as it was created.",why:{Name:"Case matters. name and Name are two different variables.",naem:"Two letters are swapped. The variable is called name."}}},
+  tray:["Name","name","naem"],run:[[1],[2,"Asha"]]},
+ {id:"defcolon",name:"The function header",
+  lines:[["def greet(name)",{g:"a"}],['    print("Hi " + name)'],['greet("Asha")']],
+  gaps:{a:{ans:"colon",ok:"A colon after the def line opens the function body.",why:{semi:"A semicolon ends a statement. A def line ends with a colon.",rpar:"The parenthesis is already closed. A def line ends with a colon."}}},
+  tray:["semi","colon","rpar"],run:[[1],[3],[2,"Hi Asha"]]},
+ {id:"typeerror",name:"The mixed types",
+  lines:[["age = 18"],['print("Age: " + ',{g:"a"},"(age))"]],
+  gaps:{a:{ans:"str",ok:"str() turns a number into text, so it can join other text.",why:{int:"int() makes a number. The + needs text on both sides.",len:"len() counts items. A number has no length."}}},
+  tray:["int","str","len"],run:[[1],[2,"Age: 18"]]},
+ {id:"boss",name:"All together",
+  lines:[["scores = [90, 85, 70",{g:"a"}],["if scores[0] >= 50",{g:"b"}],[{g:"c"},'print("Pass',{g:"d"},")"]],
+  gaps:{
+   a:{ans:"rbr",ok:"Bracket closed.",why:{rpar:"A [ closes with ], not ).",rcur:"A [ closes with ], not }."}},
+   b:{ans:"colon",ok:"Block opened.",why:{semi:"A block opens with a colon, not a semicolon.",comma:"A block opens with a colon, not a comma."}},
+   c:{ans:"i4",ok:"Indented into the if block.",why:{i0:"No indent puts print outside the if. Python expects a block."}},
+   d:{ans:"dq",ok:"String closed.",why:{sq:"The string began with a double quote. End it with one.",rpar:"A bracket does not end a string. A quote does."}}},
+  tray:["semi","rpar","dq","i0","rbr","sq","colon","i4"],run:[[1],[2],[3,"Pass"]]},
+ {id:"boss2",name:"All together, round two",
+  lines:[["def greet(age)",{g:"a"}],[{g:"b"},'print("Age: " + ',{g:"c"},"(age)",{g:"d"}],["greet(18)"]],
+  gaps:{
+   a:{ans:"colon",ok:"Function opened.",why:{semi:"A def line ends with a colon, not a semicolon.",rbr:"A ] closes a list. A def line ends with a colon.",int:"int() is a function name. The def line needs a colon."}},
+   b:{ans:"i4",ok:"Indented into the function.",why:{i0:"No indent puts print outside the function. Python expects a block."}},
+   c:{ans:"str",ok:"Number turned into text.",why:{int:"int() makes a number. The + needs text on both sides."}},
+   d:{ans:"rpar",ok:"print( is closed.",why:{rbr:"A ( closes with ), not ].",semi:"A semicolon does not close a bracket. Use )."}}},
+  tray:["semi","int","rbr","i0","colon","i4","str","rpar"],run:[[1],[3],[2,"Age: 18"]]}
+];
+/* ---------- colouring ---------- */
+function paint(line){
+  const cls=Array(line.length).fill("");
+  [[/#.*/g,"cm"],[/"[^"]*("|$)/g,"st"],[/\b(if|for|in|def|else|while|return)\b/g,"kw"],[/\b(print|range|len)\b/g,"bi"],[/\b\d+\b/g,"nm"]]
+   .forEach(([re,c])=>{let m;while((m=re.exec(line))){for(let i=m.index;i<m.index+m[0].length;i++)if(!cls[i])cls[i]=c;}});
+  let out="",i=0;
+  while(i<line.length){let j=i;while(j<line.length&&cls[j]===cls[i])j++;
+    out+=cls[i]?`<span class="${cls[i]}">${esc(line.slice(i,j))}</span>`:esc(line.slice(i,j));i=j;}
+  return out;
+}
+/* ---------- state ---------- */
+let pi=0,S=null,steps=[],cur=-1,playing=false,timer=null,sel=null,just=null,hintG=null;
+const solved=new Set();
+const delay=()=>1250-(+$("#speed").value)*110;
+const tileHTML=(id,extra="")=>`<button class="tile ${TOK[id].k} ${extra}" data-t="${id}">${TOK[id].t}</button>`;
+function load(i){
+  stop();pi=i;const P=PZ[i];
+  S={fill:{},tray:P.tray.slice()};
+  Object.keys(P.gaps).forEach(k=>S.fill[k]=P.gaps[k].pre||null);
+  steps=[];cur=-1;sel=null;just=null;hintG=null;document.body.classList.remove("sel");
+  $("#coach").className="coach";$("#coach").textContent="Drag the right piece into the dashed gap.";
+  $("#done").classList.toggle("show",solved.size===PZ.length);
+  render();
+}
+const missing=()=>{const P=PZ[pi];return Object.keys(P.gaps).filter(k=>S.fill[k]!==P.gaps[k].ans).sort().join("");};
+const entry=()=>ERR[PZ[pi].id][missing()];
+function buildSteps(){
+  const P=PZ[pi],e=entry(),total=P.lines.length;steps=[];
+  if(e.ok){
+    P.run.forEach(([l,o])=>steps.push({line:l,kind:"run",msg:o?`Line ${l} prints ${o}`:`Running line ${l}`,out:o}));
+    steps.push({line:0,kind:"done",msg:"No errors. The file ran to the end."});
+  }else{
+    const never=/never closed/.test(e.msg),runtime=!/^(SyntaxError|IndentationError|TabError)/.test(e.msg),upto=never?total:e.line;
+    if(runtime){
+      /* the file parsed fine, so Python ran top to bottom until something broke */
+      const tb=e.tb||[e.line];
+      for(let l=1;l<tb[0];l++)steps.push({line:l,kind:"run",msg:`Running line ${l}`});
+      for(let k=0;k<tb.length-1;k++)steps.push({line:tb[k],kind:"run",msg:`Running line ${tb[k]}`});
+    }
+    else for(let l=1;l<=upto;l++)steps.push({line:l,kind:"read",msg:`Reading line ${l}`});
+    steps.push({line:e.line,kind:"err",msg:e.msg,con:e.con});
+  }
+  cur=-1;
+}
+/* ---------- render ---------- */
+function render(){
+  const P=PZ[pi],e=entry(),st=cur>=0?steps[cur]:null,errNow=st&&st.kind==="err";
+  $("#pname").textContent=P.name;
+  $("#pgoal").textContent="Goal: "+ERR[P.id][""].out.join(", ");
+  $("#want").innerHTML=ERR[P.id][""].out.map(o=>`<div>${esc(o)}</div>`).join("");
+  $("#steps").innerHTML=PZ.map((p,i)=>`<button class="lv ${solved.has(i)?"done":""}" data-i="${i}" ${i===pi?'aria-current="true"':""}><i>${solved.has(i)?"✓":""}</i>${p.name.replace(/^The /,"")}</button>`).join("")+`<span class="cnt">${solved.size} / ${PZ.length} solved</span>`;
+  const clue=$("#clue"),prevCls=clue.className,txt=e.ok?"No errors. Press Run.":`Python sees: line ${e.line}, ${e.msg}`;
+  if(clue.textContent!==txt){clue.className="clue "+(e.ok?"ok":"err")+" flip";clue.textContent=txt;}
+  else clue.className="clue "+(e.ok?"ok":"err");
+  const seen=new Set();for(let k=0;k<=cur;k++)if(steps[k].line)seen.add(steps[k].line);
+  $("#code").innerHTML=P.lines.map((parts,i)=>{
+    const n=i+1;let cls="cl",mk="";
+    if(seen.has(n)||(st&&st.kind==="done")){cls+=" ok";mk="✓";}
+    if(errNow&&n===st.line){cls=cls.replace(" ok","")+" bad";mk="✕";}
+    else if(st&&st.line===n&&st.kind!=="done")cls+=" on";
+    if(!e.ok&&n===e.line&&!st)cls+=" lint";
+    const body=parts.map(p=>{
+      if(typeof p==="string")return paint(p);
+      const f=S.fill[p.g];
+      if(f){const wrong=f!==P.gaps[p.g].ans;return `<button class="gap fill ${just===p.g?"pop":""}" data-g="${p.g}" tabindex="-1"><span class="tile ${TOK[f].k} in ${wrong?"wrong":""}">${TOK[f].t}</span></button>`;}
+      return `<button class="gap ${hintG===p.g?"hint":""}" data-g="${p.g}" aria-label="empty gap"></button>`;
+    }).join("");
+    return `<div class="cl ${cls.slice(3)}"><em>${n}</em><span class="mk">${mk}</span><span class="tx">${body}</span></div>`;
+  }).join("");
+  $("#tray").innerHTML=S.tray.length?S.tray.map(id=>tileHTML(id,(sel===id?"sel ":"")+(hintG&&P.gaps[hintG].ans===id?"hint":""))).join(""):`<span class="empty">All pieces used.</span>`;
+  let h=`<div class="p">$ python main.py</div>`;
+  for(let k=0;k<=cur;k++){const s=steps[k];
+    if(s.con)h+=s.con.map(x=>`<div class="e">${esc(x)}</div>`).join("");
+    if(s.out)h+=`<div class="o">${esc(s.out)}</div>`;
+    if(s.kind==="done")h+=`<div class="d">Process finished.</div>`;}
+  h+=st&&(st.kind==="err"||st.kind==="done")?`<div class="p">$ <span class="cur"></span></div>`:`<span class="cur"></span>`;
+  $("#con").innerHTML=h;
+  const c=P&&st?(st.kind==="err"?["err","Stopped: "+e.msg.split(":")[0]]:st.kind==="done"?["fin","Finished, no errors"]:["run",st.kind==="read"?"Reading the file. Nothing has run yet.":"Running"]):["",e.ok?"Ready to run":"Waiting for the fix"];
+  $("#stage").className="stage "+c[0];$("#stage").textContent=c[1];
+  $("#run").textContent=playing?"Pause":"Run";
+  const isDone=e.ok&&solved.has(pi);
+  $("#nextp").style.display=isDone&&pi<PZ.length-1?"inline-block":"none";
+  just=null;
+}
+/* ---------- running ---------- */
+function stop(){playing=false;clearTimeout(timer);}
+function advance(){
+  if(!steps.length||cur>=steps.length-1)buildSteps();
+  cur++;render();
+}
+function tick(){
+  if(!playing)return;
+  advance();
+  if(cur>=steps.length-1){stop();render();return;}
+  timer=setTimeout(tick,delay());
+}
+$("#run").onclick=()=>{
+  if(playing){stop();render();return;}
+  buildSteps();playing=true;render();timer=setTimeout(tick,150);
+};
+$("#step").onclick=()=>{stop();if(!steps.length||cur>=steps.length-1)buildSteps();cur++;render();};
+$("#reset").onclick=()=>{load(pi);};
+$("#nextp").onclick=()=>load(pi+1);
+$("#steps").onclick=e=>{const b=e.target.closest(".lv");if(b)load(+b.dataset.i);};
+$("#hint").onclick=()=>{
+  const P=PZ[pi],k=Object.keys(P.gaps).find(k=>S.fill[k]!==P.gaps[k].ans);if(!k)return;
+  hintG=k;render();setTimeout(()=>{hintG=null;render();},2400);
+};
+/* ---------- placing pieces ---------- */
+const D_=ms=>reduce?1:ms;
+function coach(t,c){const el=$("#coach");el.className="coach "+c;el.textContent=t;}
+function resetRun(){stop();steps=[];cur=-1;}
+function place(id,key,clone,src,r0){
+  const P=PZ[pi],g=P.gaps[key],gapEl=document.querySelector(`.gap[data-g="${key}"]`);
+  const gr=gapEl.getBoundingClientRect();
+  if(id===g.ans){
+    const commit=()=>{
+      resetRun();S.fill[key]=id;S.tray=S.tray.filter(x=>x!==id);just=key;sel=null;document.body.classList.remove("sel");
+      coach(g.ok,"good");
+      const done=!missing();
+      if(done){solved.add(pi);coach("Solved. Press Run to watch it work.","good");}
+      render();
+      if(done){
+        const b=$("#board");b.classList.remove("win");void b.offsetWidth;b.classList.add("win");
+        const r=document.querySelector(`.gap[data-g="${key}"]`).getBoundingClientRect();burst(r.left+r.width/2,r.top);
+        if(solved.size===PZ.length)$("#done").classList.add("show");
+      }
+    };
+    if(clone){
+      const tx=gr.left+gr.width/2-(r0.left+r0.width/2),ty=gr.top+gr.height/2-(r0.top+r0.height/2);
+      clone.animate([{transform:clone.style.transform},{transform:`translate(${tx}px,${ty}px) scale(.8)`,opacity:.2}],{duration:D_(170),easing:"ease-in",fill:"forwards"}).onfinish=()=>{clone.remove();commit();};
+    }else commit();
+  }else{
+    coach(g.why[id]||"That piece does not fit here. Read the red message: what is Python asking for?","bad");
+    gapEl.classList.add("bad");setTimeout(()=>gapEl.classList.remove("bad"),450);
+    if(clone)flyBack(clone,src,r0);
+    sel=null;document.body.classList.remove("sel");
+    document.querySelectorAll(".tile.sel").forEach(t=>t.classList.remove("sel"));
+  }
+}
+function flyBack(clone,src,r0){
+  const sr=src.getBoundingClientRect(),tx=sr.left-r0.left,ty=sr.top-r0.top;
+  clone.animate([{transform:clone.style.transform},{transform:`translate(${tx}px,${ty}px)`}],{duration:D_(280),easing:"cubic-bezier(.3,1.4,.5,1)",fill:"forwards"}).onfinish=()=>{clone.remove();src.classList.remove("ghost");};
+}
+function burst(x,y){
+  if(reduce)return;
+  const cols=["#FFD23F","#FF8A7A","#5EE0B5","#6CB6FF","#C9B6FF"];
+  for(let i=0;i<26;i++){
+    const c=document.createElement("div");c.className="conf";c.style.cssText=`left:${x}px;top:${y}px;background:${cols[i%5]}`;document.body.appendChild(c);
+    const dx=(Math.random()-.5)*340,up=-80-Math.random()*160;
+    c.animate([{transform:"translate(0,0) rotate(0)",opacity:1},{transform:`translate(${dx*.6}px,${up}px) rotate(${Math.random()*360}deg)`,opacity:1,offset:.4},{transform:`translate(${dx}px,${up+300}px) rotate(${Math.random()*720}deg)`,opacity:0}],{duration:1100+Math.random()*400,easing:"cubic-bezier(.2,.6,.4,1)"}).onfinish=()=>c.remove();
+  }
+}
+/* drag and drop with pointer events (works with mouse and touch) */
+let D=null;
+function gapAt(x,y){
+  let best=null,bd=1e9;
+  document.querySelectorAll(".gap").forEach(g=>{
+    if(g.classList.contains("fill")&&PZ[pi].gaps[g.dataset.g].ans===S.fill[g.dataset.g])return;
+    const r=g.getBoundingClientRect(),pad=18;
+    if(x>=r.left-pad&&x<=r.right+pad&&y>=r.top-pad&&y<=r.bottom+pad){
+      const d=Math.hypot(x-(r.left+r.width/2),y-(r.top+r.height/2));if(d<bd){bd=d;best=g;}}
+  });
+  return best;
+}
+$("#tray").addEventListener("pointerdown",e=>{
+  const t=e.target.closest(".tile");if(!t)return;
+  D={id:t.dataset.t,el:t,x:e.clientX,y:e.clientY,moved:false};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);addEventListener("pointercancel",up);
+});
+function mv(e){
+  if(!D)return;
+  const dx=e.clientX-D.x,dy=e.clientY-D.y;
+  if(!D.moved&&Math.hypot(dx,dy)>6){
+    D.moved=true;D.r0=D.el.getBoundingClientRect();
+    const c=D.el.cloneNode(true);c.className=D.el.className.replace("sel","").replace("hint","")+" drag";
+    c.style.cssText=`left:${D.r0.left}px;top:${D.r0.top}px;width:${D.r0.width}px`;
+    document.body.appendChild(c);D.clone=c;D.el.classList.add("ghost");document.body.classList.add("dragging");
+  }
+  if(D.moved){
+    D.clone.style.transform=`translate(${dx}px,${dy}px) rotate(-4deg) scale(1.08)`;
+    const g=gapAt(e.clientX,e.clientY);
+    document.querySelectorAll(".gap").forEach(x=>x.classList.toggle("over",x===g));
+  }
+}
+function up(e){
+  removeEventListener("pointermove",mv);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);
+  if(!D)return;
+  const d=D;D=null;document.body.classList.remove("dragging");
+  document.querySelectorAll(".gap.over").forEach(x=>x.classList.remove("over"));
+  if(!d.moved){sel=sel===d.id?null:d.id;document.body.classList.toggle("sel",!!sel);document.querySelectorAll(".tile").forEach(t=>t.classList.toggle("sel",t.dataset.t===sel&&!!sel));return;}
+  const g=gapAt(e.clientX,e.clientY);
+  if(g)place(d.id,g.dataset.g,d.clone,d.el,d.r0);else flyBack(d.clone,d.el,d.r0);
+}
+$("#code").addEventListener("click",e=>{
+  const g=e.target.closest(".gap");if(!g||!sel)return;
+  if(g.classList.contains("fill")&&PZ[pi].gaps[g.dataset.g].ans===S.fill[g.dataset.g])return;
+  place(sel,g.dataset.g,null,null,null);
+});
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT")return;
+  if(e.key==="ArrowRight")$("#step").click();
+});
+load(0);
+})();
+</script>
+</body>
+</html>
