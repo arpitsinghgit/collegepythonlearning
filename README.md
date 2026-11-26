@@ -13,4 +13,4 @@ Create a production build with `npm run build` (output goes to `dist/`).
 
 ## Vercel
 
-A production deployment is available at [collegepythonlearning.vercel.app](https://collegepythonlearning.vercel.app). This deployment was uploaded directly to Vercel. To enable automatic deployments on future GitHub pushes, connect this repository to the Vercel project after enabling Vercel's GitHub integration.
+A production deployment is available at [collegepythonlearning.vercel.app](https://collegepythonlearning.vercel.app). The Vercel build settings are recorded in `vercel.json` (build with `npm run build`, serve `dist/`). The current deployment was uploaded directly to Vercel. To enable automatic deployments on future GitHub pushes, connect this repository to the Vercel project after enabling Vercel's GitHub integration.
