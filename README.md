@@ -1,11 +1,16 @@
 # College Python Learning
 
-A simple, responsive landing page for a Python learning path. The site is plain HTML and CSS, so it deploys directly to Vercel without a build step.
+A small, responsive landing page for a Python learning path. It is built with plain HTML and CSS and Vite, with no runtime dependencies.
 
 ## Run locally
 
-Open `index.html` in a browser.
+```sh
+npm install
+npm run dev
+```
 
-## Deploy
+Create a production build with `npm run build` (output goes to `dist/`).
 
-The project is connected to Vercel. Pushes to the connected GitHub repository can trigger deployments automatically.
+## Vercel
+
+A production deployment is available at [collegepythonlearning.vercel.app](https://collegepythonlearning.vercel.app). This deployment was uploaded directly to Vercel. To enable automatic deployments on future GitHub pushes, connect this repository to the Vercel project after enabling Vercel's GitHub integration.
